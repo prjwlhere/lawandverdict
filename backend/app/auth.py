@@ -5,7 +5,7 @@ import time
 import logging
 from functools import lru_cache
 from typing import Dict, Any, Optional
-
+import requests
 import httpx
 import jwt
 from jwt import PyJWKClient, decode, ExpiredSignatureError, InvalidIssuerError, InvalidAudienceError
@@ -153,7 +153,7 @@ def decode_token_for_debug(token: str) -> Dict[str, Any]:
     return verified.get("_raw_payload", {})
 
 
-import requests
+
 
 def get_user_from_auth0(access_token: str) -> dict:
     resp = requests.get(
