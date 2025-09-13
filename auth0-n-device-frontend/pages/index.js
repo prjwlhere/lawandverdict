@@ -1,8 +1,15 @@
 // pages/index.js
-import { Box, Button, Heading, Text, VStack, Divider } from "@chakra-ui/react";
+import {
+  Box,
+  Button,
+  Heading,
+  Text,
+  VStack,
+  Divider,
+  Icon,
+} from "@chakra-ui/react";
 import { useAuth0 } from "@auth0/auth0-react";
 import Link from "next/link";
-import { FaSignInAlt, FaArrowRight } from "react-icons/fa";
 
 export default function Home() {
   const { loginWithRedirect, isAuthenticated } = useAuth0();
@@ -33,7 +40,7 @@ export default function Home() {
           Secure Login
         </Heading>
         <Text fontSize="md" color="gray.600" textAlign="center">
-          Access your personalized <b>legal AI search dashboard</b>.  
+          Access your personalized <b>legal AI search dashboard</b>.{" "}
           This app ensures secure access with a limit of <b>N concurrent devices</b>.
         </Text>
 
@@ -44,7 +51,7 @@ export default function Home() {
             colorScheme="teal"
             size="lg"
             w="full"
-            leftIcon={<FaSignInAlt />}
+            leftIcon={<Icon boxSize={5}>🔑</Icon>}
             onClick={() => loginWithRedirect()}
           >
             Login with Auth0
@@ -56,7 +63,7 @@ export default function Home() {
               colorScheme="blue"
               size="lg"
               w="full"
-              rightIcon={<FaArrowRight />}
+              rightIcon={<Icon boxSize={5}>➡️</Icon>}
             >
               Continue
             </Button>
