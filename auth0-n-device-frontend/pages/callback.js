@@ -10,6 +10,7 @@ import {
   Spinner,
   VStack,
   useToast,
+  useDisclosure,
 } from "@chakra-ui/react";
 import OverQuotaModal from "../components/OverQuotaModal";
 
@@ -43,6 +44,7 @@ export default function CallbackPage() {
   const { isLoading, isAuthenticated, getAccessTokenSilently, logout } = useAuth0();
   const router = useRouter();
   const toast = useToast();
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [loading, setLoading] = useState(true);
   const [overquotaData, setOverquotaData] = useState(null);
@@ -75,6 +77,7 @@ export default function CallbackPage() {
 
         if (resp.data.overquota) {
           setOverquotaData(resp.data);
+          onOpen(); // open the modal
         } else {
           localStorage.setItem("session_id", resp.data.session_id);
           toast({ title: "Session registered", status: "success" });
@@ -82,6 +85,11 @@ export default function CallbackPage() {
         }
       } catch (err) {
         console.error("Session register error", err);
+        toast({
+          title: "Server unavailable",
+          description: "Backend is waking up. Please try again shortly.",
+          status: "warning",
+        });
         logout({ returnTo: window.location.origin });
       } finally {
         setLoading(false);
@@ -89,7 +97,7 @@ export default function CallbackPage() {
     })();
   }, [isLoading, isAuthenticated]);
 
-  // --- Loading State ---
+  // --- Always show a loading page first (better UX for Render cold start) ---
   if (loading || isLoading) {
     return (
       <Box
@@ -101,45 +109,57 @@ export default function CallbackPage() {
         p={6}
       >
         <VStack spacing={4}>
-          <Spinner size="xl" color="teal.500" />
+          <Spinner size="xl" color="teal.500" thickness="4px" speed="0.7s" />
           <Heading size="lg" color="teal.700">
             Lawandverdict
           </Heading>
           <Text fontSize="md" color="gray.600">
-            Finalizing sign in... please wait
+            Warming up secure backend service... this may take a moment ⏳
           </Text>
         </VStack>
       </Box>
     );
   }
 
-  // --- Over Quota (too many devices) ---
+  // --- Over Quota Modal ---
   return (
-    <Box minH="100vh" display="flex" alignItems="center" justifyContent="center" p={6}>
-      <VStack
-        maxW="500px"
-        w="full"
-        spacing={6}
-        p={8}
-        bg="white"
-        shadow="xl"
-        rounded="xl"
-        textAlign="center"
+    <>
+      {overquotaData && (
+        <OverQuotaModal
+          isOpen={isOpen}
+          onClose={onClose}
+          data={overquotaData}
+          onActivated={() => router.replace("/private")}
+        />
+      )}
+      {/* Fallback content in case modal not shown */}
+      <Box
+        minH="100vh"
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+        p={6}
       >
-        <Heading size="lg" color="teal.700">
-          Session Registration
-        </Heading>
-        {overquotaData ? (
-          <OverQuotaModal
-            data={overquotaData}
-            onActivated={() => router.replace("/private")}
-          />
-        ) : (
+        <VStack
+          maxW="500px"
+          w="full"
+          spacing={6}
+          p={8}
+          bg="white"
+          shadow="xl"
+          rounded="xl"
+          textAlign="center"
+        >
+          <Heading size="lg" color="teal.700">
+            Session Registration
+          </Heading>
           <Text fontSize="md" color="gray.600">
-            Redirecting to your secure dashboard...
+            {overquotaData
+              ? "Resolve active sessions to continue"
+              : "Redirecting to your secure dashboard..."}
           </Text>
-        )}
-      </VStack>
-    </Box>
+        </VStack>
+      </Box>
+    </>
   );
 }
