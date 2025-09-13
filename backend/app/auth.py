@@ -16,6 +16,8 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
 from .database import get_db
+from fastapi import Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 load_dotenv()
 
@@ -244,7 +246,17 @@ def get_current_user(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session pending activation")
 
     return user
-
+    
+def get_user_from_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    Lightweight dependency: verify JWT only, do NOT require X-Session-ID.
+    Use this for endpoints that must be callable by a pending candidate (e.g. cancel/force_activate).
+    """
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing Authorization credentials")
+    token = credentials.credentials
+    user = verify_jwt(token)  # returns normalized user dict
+    return user
 
 # expose for easy imports
 __all__ = ["verify_jwt", "decode_token_for_debug", "get_current_user", "get_jwks"]

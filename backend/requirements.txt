@@ -1,6 +1,8 @@
-fastapi
-uvicorn
-python-jose
-httpx                     
-redis                     
-python-dotenv              
+fastapi==0.111.1
+uvicorn[standard]==0.24.0
+sqlalchemy==2.0.22
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+httpx==1.2.3
+PyJWT==2.9.0
+python-jose==3.3.0

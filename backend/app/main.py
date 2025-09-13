@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, Request, APIRouter, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-
+from fastapi import Query, Body
 load_dotenv()
 
 from .auth import get_current_user
@@ -13,6 +13,7 @@ from .database import get_db, engine, Base
 from . import session_manager
 from fastapi.responses import JSONResponse
 from typing import Optional
+from .auth import get_current_user, get_user_from_token
 
 # Ensure DB tables exist (SQLAlchemy models import Base from database)
 Base.metadata.create_all(bind=engine)
@@ -113,19 +114,27 @@ def logout(session_id: str = Body(...), db: Session = Depends(get_db), user=Depe
     logger.info("User %s logged out session %s", user["sub"], session_id)
     return {"status": "logged_out", "session_id": session_id}
 
-
 @app.post("/sessions/cancel")
-def cancel(session_id: str = Body(...), db: Session = Depends(get_db), user=Depends(get_current_user)):
-    if not user or "sub" not in user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    ok = session_manager.cancel_session(db, user["sub"], session_id)
+def cancel(
+    session_id: str | None = Body(None),
+    session_id_q: str | None = Query(None),
+    db: Session = Depends(get_db),
+    user=Depends(get_user_from_token),
+):
+    # prefer body then query
+    sid = session_id or session_id_q
+    if not sid:
+        raise HTTPException(status_code=422, detail="Missing session_id in body or query")
+
+    ok = session_manager.cancel_session(db, user["sub"], sid)
     if not ok:
         raise HTTPException(status_code=400, detail="Unable to cancel session (not found or not pending)")
-    return {"status": "cancelled", "session_id": session_id}
+    return {"status": "cancelled", "session_id": sid}
 
-
+# FORCE ACTIVATE endpoint
 @app.post("/sessions/force_activate")
-def force_activate(candidate_id: str = Body(...), target_id: str = Body(...), db: Session = Depends(get_db), user=Depends(get_current_user)):
+def force_activate(candidate_id: str = Body(...), target_id: str = Body(...),
+                   db: Session = Depends(get_db), user=Depends(get_user_from_token)):
     if not user or "sub" not in user:
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
@@ -133,7 +142,6 @@ def force_activate(candidate_id: str = Body(...), target_id: str = Body(...), db
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"status": "activated", "session_id": candidate_id, "revoked": target_id}
-
 
 @app.get("/user/me")
 def read_users_me(user: dict = Depends(get_current_user)):

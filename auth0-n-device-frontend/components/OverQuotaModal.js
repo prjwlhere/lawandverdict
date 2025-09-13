@@ -20,7 +20,7 @@ import {
 import axios from "axios";
 import { useAuth0 } from "@auth0/auth0-react";
 
-const API = "http://localhost:8000";
+const API = "https://lawandverdict.onrender.com";
 
 export default function OverQuotaModal({ data, onActivated }) {
   const { candidate, sessions } = data;
@@ -31,25 +31,44 @@ export default function OverQuotaModal({ data, onActivated }) {
   const toast = useToast();
   const { getAccessTokenSilently } = useAuth0();
 
-  async function handleCancelCandidate() {
-    setLoading(true);
-    try {
-      const token = await getAccessTokenSilently({
-        authorizationParams: { audience: "https://fastapi-backend" },
-      });
-      await axios.post(
-        `${API}/sessions/cancel`,
-        { session_id: candidate },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast({ title: "Login cancelled", status: "info" });
-      window.location.href = "/";
-    } catch (e) {
-      toast({ title: "Unable to cancel", status: "error" });
-    } finally {
+async function handleCancelCandidate() {
+  setLoading(true);
+  try {
+    console.log("handleCancelCandidate - candidate:", candidate);
+    if (!candidate) {
+      toast({ title: "No candidate session ID found", status: "error" });
       setLoading(false);
+      return;
     }
+
+    const token = await getAccessTokenSilently({
+      authorizationParams: { audience: "https://fastapi-backend" },
+    });
+
+    const resp = await axios.post(
+      `${API}/sessions/cancel`,
+      { session_id: candidate },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 10000,
+      }
+    );
+
+    console.log("cancel resp", resp.data);
+    toast({ title: "Login cancelled", status: "info" });
+    // redirect to home
+    window.location.href = "/";
+  } catch (e) {
+    console.error("cancel error", e);
+    const detail = e?.response?.data?.detail || e?.message || "Unable to cancel";
+    toast({ title: detail, status: "error" });
+  } finally {
+    setLoading(false);
   }
+}
 
   async function handleForceActivate() {
     if (!selectedTarget) {

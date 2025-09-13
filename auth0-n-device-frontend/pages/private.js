@@ -14,7 +14,7 @@ import {
 } from "@chakra-ui/react";
 import { useRouter } from "next/router";
 
-const API = "http://localhost:8000";
+const API = "https://lawandverdict.onrender.com";
 
 export default function PrivatePage() {
   const { getAccessTokenSilently, logout } = useAuth0();
@@ -57,21 +57,40 @@ export default function PrivatePage() {
     fetchMe();
   }, []);
 
-  async function handleLogout() {
+async function handleLogout() {
+  try {
     const token = await getAccessTokenSilently({
       authorizationParams: { audience: "https://fastapi-backend" },
     });
+
     const session_id = localStorage.getItem("session_id");
+
     if (session_id) {
+      // include X-Session-ID header so backend dependency can validate session ownership
       await axios.post(
         `${API}/sessions/logout`,
-        { session_id },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { session_id }, // body
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-Session-ID": session_id, // <- important
+            "Content-Type": "application/json",
+          },
+        }
       );
       localStorage.removeItem("session_id");
     }
+
+    // finally log out from Auth0
+    logout({ returnTo: window.location.origin });
+  } catch (err) {
+    console.error("Logout error", err);
+    // best-effort: clear local session and redirect to login
+    localStorage.removeItem("session_id");
+    // optionally show user a friendly message before redirecting
     logout({ returnTo: window.location.origin });
   }
+}
 
   if (errorMsg) {
     return (

@@ -13,7 +13,7 @@ import {
 } from "@chakra-ui/react";
 import OverQuotaModal from "../components/OverQuotaModal";
 
-const API = "http://localhost:8000";
+const API = "https://lawandverdict.onrender.com";
 const DEVICE_NAME = "My Browser";
 
 export default function CallbackPage() {
