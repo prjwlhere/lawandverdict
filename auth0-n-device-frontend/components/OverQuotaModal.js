@@ -8,13 +8,13 @@ import {
   ModalCloseButton,
   ModalBody,
   ModalFooter,
+  Button,
   VStack,
   HStack,
   Text,
   Badge,
   Box,
   Select,
-  Button,
   useToast,
 } from "@chakra-ui/react";
 import axios from "axios";
@@ -22,84 +22,81 @@ import { useAuth0 } from "@auth0/auth0-react";
 
 const API = "https://lawandverdict.onrender.com";
 
-function OverQuotaModal({ isOpen, onClose, data, onActivated }) {
-  const { user } = useAuth0();
-  const toast = useToast();
-
-  const [selectedTarget, setSelectedTarget] = useState("");
+export default function OverQuotaModal({ isOpen, onClose, data, onActivated }) {
+  const { candidate, sessions } = data;
+  const [selectedTarget, setSelectedTarget] = useState(
+    sessions.find((s) => s.status === "active")?.id || ""
+  );
   const [loading, setLoading] = useState(false);
+  const toast = useToast();
+  const { getAccessTokenSilently } = useAuth0();
 
-  const handleCancelCandidate = async () => {
+  async function handleCancelCandidate() {
     setLoading(true);
     try {
-      await axios.post(`${API}/sessions/cancel`, {
-        candidate: data.candidate,
+      if (!candidate) {
+        toast({ title: "No candidate session ID found", status: "error" });
+        return;
+      }
+
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: "https://fastapi-backend" },
       });
-      toast({
-        title: "Login canceled",
-        description: "Your login attempt has been canceled.",
-        status: "info",
-        duration: 4000,
-        isClosable: true,
-      });
-      onClose();
-    } catch (err) {
-      toast({
-        title: "Error",
-        description: "Failed to cancel login.",
-        status: "error",
-        duration: 4000,
-        isClosable: true,
-      });
+
+      await axios.post(
+        `${API}/sessions/cancel`,
+        { session_id: candidate },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 10000,
+        }
+      );
+
+      toast({ title: "Login cancelled", status: "info" });
+      window.location.href = "/";
+    } catch (e) {
+      const detail =
+        e?.response?.data?.detail || e?.message || "Unable to cancel";
+      toast({ title: detail, status: "error" });
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const handleForceActivate = async () => {
+  async function handleForceActivate() {
     if (!selectedTarget) {
-      toast({
-        title: "Select a session",
-        description: "Please choose a session to revoke.",
-        status: "warning",
-        duration: 4000,
-        isClosable: true,
-      });
+      toast({ title: "Select a device to revoke", status: "warning" });
       return;
     }
-
     setLoading(true);
     try {
-      const resp = await axios.post(`${API}/sessions/force-activate`, {
-        candidate: data.candidate,
-        target: selectedTarget,
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: "https://fastapi-backend" },
       });
 
-      toast({
-        title: "Session revoked",
-        description: "Selected session has been revoked. You are now logged in.",
-        status: "success",
-        duration: 4000,
-        isClosable: true,
-      });
+      await axios.post(
+        `${API}/sessions/force_activate`,
+        { candidate_id: candidate, target_id: selectedTarget }, // 👈 unchanged payload
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-      onActivated(resp.data);
-      onClose();
-    } catch (err) {
-      toast({
-        title: "Error",
-        description: "Failed to revoke session.",
-        status: "error",
-        duration: 4000,
-        isClosable: true,
-      });
+      localStorage.setItem("session_id", candidate);
+      toast({ title: "Activated on this device", status: "success" });
+      onActivated();
+    } catch (e) {
+      const detail =
+        e?.response?.data?.detail || e?.message || "Unable to force activate";
+      toast({ title: detail, status: "error" });
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} isCentered size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} isCentered>
       <ModalOverlay />
       <ModalContent maxW="lg" rounded="xl" shadow="xl">
         <ModalHeader fontWeight="bold" fontSize="xl" color="gray.800">
@@ -118,7 +115,7 @@ function OverQuotaModal({ isOpen, onClose, data, onActivated }) {
               <Text fontWeight="semibold" mb={3}>
                 Active Sessions
               </Text>
-              {data.sessions.map((s) => (
+              {sessions.map((s) => (
                 <HStack
                   key={s.id}
                   justify="space-between"
@@ -168,7 +165,7 @@ function OverQuotaModal({ isOpen, onClose, data, onActivated }) {
                 onChange={(e) => setSelectedTarget(e.target.value)}
                 placeholder="Choose a session..."
               >
-                {data.sessions
+                {sessions
                   .filter((s) => s.status === "active")
                   .map((s) => (
                     <option key={s.id} value={s.id}>
@@ -201,5 +198,3 @@ function OverQuotaModal({ isOpen, onClose, data, onActivated }) {
     </Modal>
   );
 }
-
-export default OverQuotaModal;
