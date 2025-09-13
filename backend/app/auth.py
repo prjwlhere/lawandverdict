@@ -166,6 +166,7 @@ def get_current_user(
       - verifies JWT using verify_jwt()
       - requires X-Session-ID header for protected endpoints (except /sessions/register)
       - verifies session exists, belongs to the token sub, and is active
+      - includes name and phone_number from JWT for frontend
     """
     # extract token
     if not credentials:
@@ -176,7 +177,11 @@ def get_current_user(
     # verify token
     user = verify_jwt(token)
 
-    # allow /sessions/register without X-Session-ID (this call creates the session)
+    # normalize name & phone_number from JWT
+    user["name"] = user.get("name") or user["_raw_payload"].get("name")
+    user["phone_number"] = user.get("phone_number") or user["_raw_payload"].get("phone_number")
+
+    # allow /sessions/register without X-Session-ID
     path = request.url.path
     if path != "/sessions/register":
         session_id = request.headers.get("X-Session-ID")
@@ -201,6 +206,7 @@ def get_current_user(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session pending activation")
 
     return user
+
     
 def get_user_from_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
