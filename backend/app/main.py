@@ -25,7 +25,7 @@ app = FastAPI(title="N-device Demo Backend")
 router = APIRouter()
 
 # allow localhost:3000 during development (update env for prod)
-origins = [os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")]
+origins = [os.getenv("FRONTEND_ORIGIN", "http://localhost:3000", "https://lawandverdict.vercel.app")]
 
 app.add_middleware(
     CORSMiddleware,
