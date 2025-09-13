@@ -8,8 +8,7 @@ from typing import Dict, Any, Optional
 
 import httpx
 import jwt
-from jwt import ImmatureSignatureError
-from jwt.algorithms import RSAAlgorithm
+from jwt import PyJWKClient, decode, ExpiredSignatureError, InvalidIssuerError, InvalidAudienceError
 from fastapi import HTTPException, status, Request, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
@@ -86,102 +85,59 @@ def _canonicalize_token(raw: Optional[str]) -> Optional[str]:
 # -------------------------
 # Core verifier
 # -------------------------
-def verify_jwt(token: str) -> Dict[str, Any]:
+def verify_jwt(token: str) -> dict:
     """
-    Verify an Auth0-issued access token (JWT).
+    Verify an Auth0-issued access token (JWT) using PyJWKClient.
 
     Returns a dict with 'sub', optional name/phone, and '_raw_payload'.
-    Raises HTTPException(401) on verification failure with a helpful message.
+    Raises HTTPException(401) on verification failure.
     """
     logger.debug("verify_jwt called")
 
-    token = _canonicalize_token(token)
+    # Basic sanity check
     if token is None or not isinstance(token, str) or len(token.split(".")) != 3:
-        logger.warning("Token is not JWT-like after canonicalization: %r", token)
+        logger.warning("Token is not JWT-like: %r", token)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token format")
 
-    # read unverified header to get kid
     try:
-        headers = jwt.get_unverified_header(token)
+        # Fetch signing key from Auth0 JWKS endpoint
+        jwks_url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
+        jwks_client = PyJWKClient(jwks_url)
+        signing_key = jwks_client.get_signing_key_from_jwt(token).key
     except Exception as e:
-        logger.exception("Failed to get unverified header from token")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Malformed token header: {e}")
+        logger.exception("Failed to get signing key from JWKS")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Failed to fetch signing key: {e}")
 
-    kid = headers.get("kid")
-    logger.debug("Token header kid: %s", kid)
-    if not kid:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing 'kid' header")
-
-    # find matching JWK
-    jwks = get_jwks()
-    key = next((k for k in jwks.get("keys", []) if k.get("kid") == kid), None)
-    if not key:
-        # retry once after clearing cache
-        logger.debug("Kid not found, clearing JWKS cache and retry")
-        get_jwks.cache_clear()
-        jwks = get_jwks()
-        key = next((k for k in jwks.get("keys", []) if k.get("kid") == kid), None)
-        if not key:
-            logger.error("Public key for kid not found in JWKS")
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Public key not found for token kid")
-
-    logger.debug("Found JWK for kid, building public key")
+    # Decode token
     try:
-        public_key = RSAAlgorithm.from_jwk(json.dumps(key))
-    except Exception as e:
-        logger.exception("Failed to build public key from JWK")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid JWK format: {e}")
-
-    # decode token while skipping audience verification (we will check aud manually)
-    try:
-        payload = jwt.decode(
+        payload = decode(
             token,
-            public_key,
+            signing_key,
             algorithms=ALGORITHMS,
-            options={"verify_aud": False},
+            audience=API_AUDIENCE,
             issuer=f"https://{AUTH0_DOMAIN}/",
             leeway=JWT_LEEWAY,
         )
-    except ImmatureSignatureError:
-        # token iat is in future — show details and hint about clock skew
-        try:
-            unverified = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
-            iat = unverified.get("iat")
-        except Exception:
-            iat = None
+    except ImmatureSignatureError as e:
         now = int(time.time())
-        logger.warning("Token not yet valid (iat=%s now=%s leeway=%s)", iat, now, JWT_LEEWAY)
+        logger.warning("Token not yet valid (iat). Server time now=%s", now)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Token not yet valid (iat={iat}). Server time now={now}. Consider increasing JWT_LEEWAY or syncing server clock."
+            detail=f"Token not yet valid. Server time now={now}. Consider increasing JWT_LEEWAY or syncing server clock."
         )
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         logger.warning("Token expired")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
-    except jwt.InvalidIssuerError as e:
+    except InvalidIssuerError as e:
         logger.warning("Invalid issuer: %s", e)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token issuer: {e}")
-    except jwt.InvalidSignatureError as e:
-        logger.warning("Invalid signature: %s", e)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token signature: {e}")
     except Exception as e:
         logger.exception("JWT decode error")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"JWT decode error: {e}")
 
     logger.debug("Decoded JWT payload keys: %s", list(payload.keys()))
 
-    # manual audience validation (aud may be str or list)
-    aud = payload.get("aud")
-    if isinstance(aud, str):
-        aud = [aud]
-    logger.debug("Token aud claim: %s (expected %s)", aud, API_AUDIENCE)
-    if not aud or API_AUDIENCE not in aud:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid audience in token (expected '{API_AUDIENCE}'). token aud={payload.get('aud')}"
-        )
-
-    # normalized user object
+    # Return normalized user object
     user = {
         "sub": payload.get("sub"),
         "name": payload.get(f"{CUSTOM_NAMESPACE}name") or payload.get("name"),
@@ -190,7 +146,6 @@ def verify_jwt(token: str) -> Dict[str, Any]:
     }
     logger.debug("verify_jwt success for sub=%s", user["sub"])
     return user
-
 
 # convenience: decode token for debug endpoints (calls verify_jwt)
 def decode_token_for_debug(token: str) -> Dict[str, Any]:

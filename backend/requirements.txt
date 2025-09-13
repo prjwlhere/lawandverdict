@@ -4,5 +4,5 @@ sqlalchemy
 psycopg2-binary
 python-dotenv
 httpx
-PyJWT==2.6.0
+PyJWT
 python-jose
