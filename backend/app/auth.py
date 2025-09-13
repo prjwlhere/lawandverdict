@@ -153,6 +153,17 @@ def decode_token_for_debug(token: str) -> Dict[str, Any]:
     return verified.get("_raw_payload", {})
 
 
+import requests
+
+def get_user_from_auth0(access_token: str) -> dict:
+    resp = requests.get(
+        "https://dev-8whvepj1827d3ilh.us.auth0.com/userinfo",
+        headers={"Authorization": f"Bearer {access_token}"}
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
 # -------------------------
 # FastAPI dependency
 # -------------------------
@@ -177,9 +188,9 @@ def get_current_user(
     # verify token
     user = verify_jwt(token)
 
-    # normalize name & phone_number from JWT
-    user["name"] = user.get("name") or user["_raw_payload"].get("name")
-    user["phone_number"] = user.get("phone_number") or user["_raw_payload"].get("phone_number")
+    user_info = get_user_from_auth0(token)
+    user["name"] = user_info.get("name")
+    user["phone_number"] = user_info.get("phone_number")  # if available
 
     # allow /sessions/register without X-Session-ID
     path = request.url.path
