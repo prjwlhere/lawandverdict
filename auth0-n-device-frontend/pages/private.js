@@ -11,6 +11,8 @@ import {
   HStack,
   Alert,
   AlertIcon,
+  Divider,
+  Flex,
 } from "@chakra-ui/react";
 import { useRouter } from "next/router";
 
@@ -25,7 +27,7 @@ export default function PrivatePage() {
   async function fetchMe() {
     const session_id = localStorage.getItem("session_id");
     if (!session_id) {
-      setErrorMsg("No session ID found. Please login again.");
+      setErrorMsg("No active session found. Please log in again.");
       return;
     }
 
@@ -44,9 +46,7 @@ export default function PrivatePage() {
       const detail = err?.response?.data?.detail || err.message;
       if (detail.toLowerCase().includes("revoked")) {
         localStorage.removeItem("session_id");
-        setErrorMsg(
-          "You were logged out from this device. Please sign in again."
-        );
+        setErrorMsg("Your session was revoked. Please log in again.");
       } else {
         setErrorMsg(detail);
       }
@@ -57,84 +57,111 @@ export default function PrivatePage() {
     fetchMe();
   }, []);
 
-async function handleLogout() {
-  try {
-    const token = await getAccessTokenSilently({
-      authorizationParams: { audience: "https://fastapi-backend" },
-    });
+  async function handleLogout() {
+    try {
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: "https://fastapi-backend" },
+      });
 
-    const session_id = localStorage.getItem("session_id");
+      const session_id = localStorage.getItem("session_id");
 
-    if (session_id) {
-      // include X-Session-ID header so backend dependency can validate session ownership
-      await axios.post(
-        `${API}/sessions/logout`,
-        { session_id }, // body
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "X-Session-ID": session_id, // <- important
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      if (session_id) {
+        await axios.post(
+          `${API}/sessions/logout`,
+          { session_id },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "X-Session-ID": session_id,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        localStorage.removeItem("session_id");
+      }
+
+      logout({ returnTo: window.location.origin });
+    } catch (err) {
+      console.error("Logout error", err);
       localStorage.removeItem("session_id");
+      logout({ returnTo: window.location.origin });
     }
-
-    // finally log out from Auth0
-    logout({ returnTo: window.location.origin });
-  } catch (err) {
-    console.error("Logout error", err);
-    // best-effort: clear local session and redirect to login
-    localStorage.removeItem("session_id");
-    // optionally show user a friendly message before redirecting
-    logout({ returnTo: window.location.origin });
   }
-}
 
+  // --- Error State ---
   if (errorMsg) {
     return (
-      <Box p={8}>
-        <VStack spacing={4}>
-          <Alert status="warning">
+      <Box minH="100vh" display="flex" alignItems="center" justifyContent="center" bg="gray.50">
+        <VStack spacing={6} p={10} bg="white" rounded="xl" shadow="lg">
+          <Alert status="warning" rounded="md">
             <AlertIcon />
             {errorMsg}
           </Alert>
-          <HStack>
-            <Button colorScheme="teal" onClick={() => router.push("/")}>
-              Sign in again
-            </Button>
-          </HStack>
+          <Button colorScheme="teal" onClick={() => router.push("/")}>
+            Back to Login
+          </Button>
         </VStack>
       </Box>
     );
   }
 
+  // --- Loading State ---
   if (!userInfo) {
     return (
-      <Box p={8}>
-        <Text>Loading profile...</Text>
+      <Box minH="100vh" display="flex" alignItems="center" justifyContent="center">
+        <Text fontSize="lg" color="gray.600">
+          Loading your profile...
+        </Text>
       </Box>
     );
   }
 
+  // --- Main Profile ---
   return (
-    <Box p={8}>
-      <VStack spacing={6} align="start">
-        <Heading>Private area</Heading>
-        <Text>
-          <strong>Full name:</strong> {userInfo.name || "—"}
-        </Text>
-        <Text>
-          <strong>Phone:</strong> {userInfo.phone_number || "—"}
-        </Text>
+    <Box minH="100vh" bg="gray.50" p={8}>
+      <VStack
+        maxW="600px"
+        mx="auto"
+        spacing={6}
+        align="stretch"
+        bg="white"
+        p={10}
+        rounded="2xl"
+        shadow="xl"
+      >
+        {/* Header */}
+        <Box textAlign="center">
+          <Heading size="lg" color="teal.700">
+            Welcome to Lawandverdict
+          </Heading>
+          <Text fontSize="sm" color="gray.500">
+            Jaipur, Rajasthan · Secure Legal AI Search
+          </Text>
+        </Box>
 
-        <HStack spacing={4}>
-          <Button colorScheme="red" onClick={handleLogout}>
+        <Divider />
+
+        {/* User Info */}
+        <VStack align="start" spacing={3}>
+          <Text>
+            <strong>Full name:</strong> {userInfo.name || "Not provided"}
+          </Text>
+          <Text>
+            <strong>Phone:</strong> {userInfo.phone_number || "Not provided"}
+          </Text>
+        </VStack>
+
+        <Divider />
+
+        {/* Actions */}
+        <Flex justify="space-between" gap={4}>
+          <Button colorScheme="red" flex="1" onClick={handleLogout}>
             Log out
           </Button>
-          <Button onClick={() => window.location.reload()}>Refresh</Button>
-        </HStack>
+          <Button flex="1" variant="outline" onClick={() => window.location.reload()}>
+            Refresh
+          </Button>
+        </Flex>
       </VStack>
     </Box>
   );

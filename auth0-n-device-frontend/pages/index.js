@@ -1,37 +1,73 @@
 // pages/index.js
-import { Box, Button, Heading, Text, VStack } from "@chakra-ui/react";
+import { Box, Button, Heading, Text, VStack, Divider } from "@chakra-ui/react";
 import { useAuth0 } from "@auth0/auth0-react";
 import Link from "next/link";
+import { FaSignInAlt, FaArrowRight } from "react-icons/fa";
 
 export default function Home() {
   const { loginWithRedirect, isAuthenticated } = useAuth0();
 
   return (
-    <Box minH="100vh" bg="gray.50" p={8}>
+    <Box minH="100vh" bgGradient="linear(to-br, teal.50, gray.100)" p={8}>
+      {/* Header / Brand */}
+      <Box textAlign="center" mb={10}>
+        <Heading size="2xl" color="teal.700" letterSpacing="tight">
+          Lawandverdict
+        </Heading>
+        <Text fontSize="md" color="gray.600" mt={2}>
+          Jaipur, Rajasthan · The most user-friendly AI search engine for lawyers
+        </Text>
+      </Box>
+
+      {/* Main Card */}
       <VStack
         maxW="600px"
         mx="auto"
         spacing={6}
         bg="white"
         p={10}
-        rounded="lg"
-        shadow="md"
+        rounded="2xl"
+        shadow="xl"
       >
-        <Heading size="lg">N-Device Login Demo</Heading>
-        <Text>
-          Login with Auth0. This app enforces at most N concurrent devices.
+        <Heading size="lg" color="teal.700">
+          Secure Login
+        </Heading>
+        <Text fontSize="md" color="gray.600" textAlign="center">
+          Access your personalized <b>legal AI search dashboard</b>.  
+          This app ensures secure access with a limit of <b>N concurrent devices</b>.
         </Text>
 
+        <Divider />
+
         {!isAuthenticated ? (
-          <Button colorScheme="teal" onClick={() => loginWithRedirect()}>
+          <Button
+            colorScheme="teal"
+            size="lg"
+            w="full"
+            leftIcon={<FaSignInAlt />}
+            onClick={() => loginWithRedirect()}
+          >
             Login with Auth0
           </Button>
         ) : (
           <Link href="/callback" passHref>
-            <Button colorScheme="blue">Continue</Button>
+            <Button
+              as="a"
+              colorScheme="blue"
+              size="lg"
+              w="full"
+              rightIcon={<FaArrowRight />}
+            >
+              Continue
+            </Button>
           </Link>
         )}
       </VStack>
+
+      {/* Footer */}
+      <Box textAlign="center" mt={12} color="gray.500" fontSize="sm">
+        © {new Date().getFullYear()} Lawandverdict · Jaipur, Rajasthan · All Rights Reserved
+      </Box>
     </Box>
   );
 }

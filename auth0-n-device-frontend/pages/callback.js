@@ -15,7 +15,7 @@ import OverQuotaModal from "../components/OverQuotaModal";
 
 const API = "https://lawandverdict.onrender.com";
 
-// Helper to get a friendly device + browser name
+// --- Helper to detect device/browser ---
 function getDeviceName() {
   const ua = navigator.userAgent;
   let device = "Web Browser";
@@ -27,7 +27,6 @@ function getDeviceName() {
   else if (/iPad/i.test(ua)) device = "iPad";
   else if (/Android/i.test(ua)) device = "Android Device";
 
-  // Detect browser name and version
   let browser = "Unknown Browser";
   const match =
     ua.match(/(firefox|msie|chrome|safari|edg|opera|opr|trident(?=\/))\/?\s*(\d+)/i) || [];
@@ -41,8 +40,7 @@ function getDeviceName() {
 }
 
 export default function CallbackPage() {
-  const { isLoading, isAuthenticated, getAccessTokenSilently, logout } =
-    useAuth0();
+  const { isLoading, isAuthenticated, getAccessTokenSilently, logout } = useAuth0();
   const router = useRouter();
   const toast = useToast();
 
@@ -56,18 +54,13 @@ export default function CallbackPage() {
       return;
     }
 
-    console.log("User authenticated, registering session now...");
-
     (async () => {
       try {
         const token = await getAccessTokenSilently({
           authorizationParams: { audience: "https://fastapi-backend" },
         });
-        console.log("Got token", token);
-        localStorage.setItem("debug_token", token);
 
-        const DEVICE_NAME = getDeviceName(); // dynamic device/browser name
-        console.log("Registering device:", DEVICE_NAME);
+        const DEVICE_NAME = getDeviceName();
 
         const resp = await axios.post(
           `${API}/sessions/register`,
@@ -80,8 +73,6 @@ export default function CallbackPage() {
           }
         );
 
-        console.log("API response", resp.data);
-
         if (resp.data.overquota) {
           setOverquotaData(resp.data);
         } else {
@@ -90,7 +81,7 @@ export default function CallbackPage() {
           router.replace("/private");
         }
       } catch (err) {
-        console.error("register error", err);
+        console.error("Session register error", err);
         logout({ returnTo: window.location.origin });
       } finally {
         setLoading(false);
@@ -98,29 +89,57 @@ export default function CallbackPage() {
     })();
   }, [isLoading, isAuthenticated]);
 
+  // --- Loading State ---
   if (loading || isLoading) {
     return (
-      <Box minH="100vh" display="flex" alignItems="center" justifyContent="center">
+      <Box
+        minH="100vh"
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+        bg="gray.50"
+        p={6}
+      >
         <VStack spacing={4}>
-          <Spinner size="xl" />
-          <Heading>Finalizing sign in...</Heading>
-          <Text>Registering this device...</Text>
+          <Spinner size="xl" color="teal.500" />
+          <Heading size="lg" color="teal.700">
+            Lawandverdict
+          </Heading>
+          <Text fontSize="md" color="gray.600">
+            Finalizing sign in... please wait
+          </Text>
         </VStack>
       </Box>
     );
   }
 
+  // --- Over Quota (too many devices) ---
   return (
-    <Box p={8}>
-      <Heading>Session registration</Heading>
-      {overquotaData ? (
-        <OverQuotaModal
-          data={overquotaData}
-          onActivated={() => router.replace("/private")}
-        />
-      ) : (
-        <Text>Redirecting...</Text>
-      )}
+    <Box minH="100vh" display="flex" alignItems="center" justifyContent="center" p={6}>
+      <VStack
+        maxW="500px"
+        w="full"
+        spacing={6}
+        p={8}
+        bg="white"
+        shadow="xl"
+        rounded="xl"
+        textAlign="center"
+      >
+        <Heading size="lg" color="teal.700">
+          Session Registration
+        </Heading>
+        {overquotaData ? (
+          <OverQuotaModal
+            data={overquotaData}
+            onActivated={() => router.replace("/private")}
+          />
+        ) : (
+          <Text fontSize="md" color="gray.600">
+            Redirecting to your secure dashboard...
+          </Text>
+        )}
+      </VStack>
     </Box>
   );
 }
